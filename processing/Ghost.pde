@@ -7,8 +7,10 @@ class Ghost {
     }
 
     void move(float dx, float dy) {
-        x += dx;
-        y += dy;
+        if( ( x+dx > pW && x+dx < (fieldW+pW) ) && ( y+dy > pH && y+dy < (fieldH+pH) ) ){
+          x += dx;
+          y += dy;
+        }
     }
 
     void display() {

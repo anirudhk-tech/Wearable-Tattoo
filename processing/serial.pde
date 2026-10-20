@@ -1,6 +1,6 @@
 import processing.serial.*;
 
-String PORT_NAME = "/dev/cu.usbmodem123456781";
+String PORT_NAME = "/dev/ttyACM0";
 int baudrate = 115200;
 Serial port;
 
@@ -23,11 +23,13 @@ void serialEvent(Serial p) {
     if (sensor == 1) pacman.move(0, 10);
     if (sensor == 2) pacman.move(-10, 0);
     if (sensor == 3) pacman.move(10, 0);
-
+    if (sensor == 0 || sensor == 1 || sensor == 2 || sensor == 3) chackPoints();
+/*
     if (sensor == 4) ghost.move(0, -10);
     if (sensor == 5) ghost.move(0, 10);
     if (sensor == 6) ghost.move(-10, 0);
     if (sensor == 7) ghost.move(10, 0);
-
+*/
     if (sensor == 8 || sensor == 9) resetGame();
+
 }

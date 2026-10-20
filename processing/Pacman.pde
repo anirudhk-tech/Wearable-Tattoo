@@ -8,9 +8,11 @@ class Pacman {
     }
 
     void move(float dx, float dy) {
-        x += dx;
-        y += dy;
-        angle = atan2(dy, dx);
+        if( ( x+dx > pW && x+dx < (fieldW+pW) ) && ( y+dy > pH && y+dy < (fieldH+pH) ) ){
+          x += dx;
+          y += dy;
+          angle = atan2(dy, dx);
+        }
     }
 
     void display() {
