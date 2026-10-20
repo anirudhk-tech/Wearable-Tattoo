@@ -7,6 +7,7 @@ Pacman pacman;
 void setup() {
     size(1000, 830);
     pacman = new Pacman(500, 415);
+    setupSerial();
     for (int i = 0; i < numDots; i++) {
         dotX[i] = random(300, 700);
         dotY[i] = random(200, 500);
