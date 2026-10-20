@@ -1,13 +1,21 @@
 import processing.serial.*;
 
+<<<<<<< HEAD
 String PORT_NAME = "/dev/ttyACM0";
+=======
+String PACMAN_PORT_NAME = "/dev/cu.usbmodem123456781";
+String GHOST_PORT_NAME = "/dev/cu.usbmodemXXXXXXXX";
+>>>>>>> 0bd731c (pulling)
 int baudrate = 115200;
-Serial port;
+Serial pacmanPort;
+Serial ghostPort;
 
 void setupSerial() {
     printArray(Serial.list());
-    port = new Serial(this, PORT_NAME, baudrate);
-    port.bufferUntil('\n');
+    pacmanPort = new Serial(this, PACMAN_PORT_NAME, baudrate);
+    pacmanPort.bufferUntil('\n');
+    ghostPort = new Serial(this, GHOST_PORT_NAME, baudrate);
+    ghostPort.bufferUntil('\n');
 }
 
 void serialEvent(Serial p) {
@@ -19,17 +27,19 @@ void serialEvent(Serial p) {
     if (match(line, "^\\d+$") == null) return;
 
     int sensor = int(line);
-    if (sensor == 0) pacman.move(0, -10);
-    if (sensor == 1) pacman.move(0, 10);
-    if (sensor == 2) pacman.move(-10, 0);
-    if (sensor == 3) pacman.move(10, 0);
-    if (sensor == 0 || sensor == 1 || sensor == 2 || sensor == 3) chackPoints();
-/*
-    if (sensor == 4) ghost.move(0, -10);
-    if (sensor == 5) ghost.move(0, 10);
-    if (sensor == 6) ghost.move(-10, 0);
-    if (sensor == 7) ghost.move(10, 0);
-*/
-    if (sensor == 8 || sensor == 9) resetGame();
 
+    if (sensor == 8 || sensor == 9) {
+        resetGame();
+        return;
+    }
+
+    float dx = 0;
+    float dy = 0;
+    if (sensor == 0) dy = -10;
+    if (sensor == 1) dy = 10;
+    if (sensor == 2) dx = -10;
+    if (sensor == 3) dx = 10;
+
+    if (p == pacmanPort) pacman.move(dx, dy);
+    if (p == ghostPort) ghost.move(dx, dy);
 }
