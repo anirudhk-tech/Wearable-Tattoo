@@ -2,11 +2,11 @@ int numDots = 10;
 float[] dotX = new float[numDots];
 float[] dotY = new float[numDots];
 
-Snake snake;
+Pacman pacman;
 
 void setup() {
     size(1000, 830);
-    snake = new Snake(500, 415, 15);
+    pacman = new Pacman(500, 415);
     for (int i = 0; i < numDots; i++) {
         dotX[i] = random(300, 700);
         dotY[i] = random(200, 500);
@@ -30,12 +30,12 @@ void draw() {
         ellipse(dotX[i], dotY[i], 10, 10);
     }
 
-    snake.display();
+    pacman.display();
 }
 
 void keyPressed() {
-    if (keyCode == UP) snake.move(0, -10);
-    if (keyCode == DOWN) snake.move(0, 10);
-    if (keyCode == LEFT) snake.move(-10, 0);
-    if (keyCode == RIGHT) snake.move(10, 0);
+    if (keyCode == UP) pacman.move(0, -10);
+    if (keyCode == DOWN) pacman.move(0, 10);
+    if (keyCode == LEFT) pacman.move(-10, 0);
+    if (keyCode == RIGHT) pacman.move(10, 0);
 }
