@@ -32,10 +32,3 @@ void draw() {
 
     pacman.display();
 }
-
-void keyPressed() {
-    if (keyCode == UP) pacman.move(0, -10);
-    if (keyCode == DOWN) pacman.move(0, 10);
-    if (keyCode == LEFT) pacman.move(-10, 0);
-    if (keyCode == RIGHT) pacman.move(10, 0);
-}

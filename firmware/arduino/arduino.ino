@@ -52,12 +52,11 @@ void loop() {
     bool touched = chipSaysTouched || dropped;
 
     if (touched && !wasTouched[s]) {
-      Serial.print("Sensor ");
+      Serial.print("Sensor touched:");
       Serial.print(s);
-      Serial.println(" touched");
     }
     wasTouched[s] = touched;
   }
 
   delay(10);
-} 
+}
