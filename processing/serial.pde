@@ -36,6 +36,10 @@ void serialEvent(Serial p) {
     if (sensor == 2) dx = -10;
     if (sensor == 3) dx = 10;
 
-    if (p == pacmanPort) pacman.move(dx, dy);
+    if (p == pacmanPort){
+      pacman.move(dx, dy);
+      checkPoints();
+      checkGameOver();
+    }
     if (p == ghostPort) ghost.move(dx, dy);
 }

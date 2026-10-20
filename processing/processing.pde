@@ -19,9 +19,11 @@ void resetGame() {
     for (int i = 0; i < numDots; i++) {
         dots[i] = new Dot(int(random(pW/10, (pW+fieldW)/10)) * 10, int(random(pH/10, (pH+fieldH)/10)) * 10);
     }
+    
+    totScore = 0;
 }
 
-void chackPoints(){
+void checkPoints(){
   
   for(int i = 0; i < numDots; i++){
     //print("pacman.x: " + pacman.x + " dots[i].x: " + dots[i].x + " pacman.y: " + pacman.y + " dots[i].y: " + dots[i].y + "\n");
@@ -31,7 +33,12 @@ void chackPoints(){
       dots[i].y = int(random(pH/10, (pH+fieldH)/10)) * 10;
     }
   }
-  
+}
+
+void checkGameOver(){
+  if(pacman.x == ghost.x && pacman.y == ghost.y){
+    resetGame();
+  }
 }
 
 
