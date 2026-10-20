@@ -23,4 +23,11 @@ void serialEvent(Serial p) {
     if (sensor == 1) pacman.move(0, 10);
     if (sensor == 2) pacman.move(-10, 0);
     if (sensor == 3) pacman.move(10, 0);
+
+    if (sensor == 4) ghost.move(0, -10);
+    if (sensor == 5) ghost.move(0, 10);
+    if (sensor == 6) ghost.move(-10, 0);
+    if (sensor == 7) ghost.move(10, 0);
+
+    if (sensor == 8 || sensor == 9) resetGame();
 }

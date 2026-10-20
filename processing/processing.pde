@@ -3,11 +3,17 @@ float[] dotX = new float[numDots];
 float[] dotY = new float[numDots];
 
 Pacman pacman;
+Ghost ghost;
 
 void setup() {
     size(1000, 830);
-    pacman = new Pacman(500, 415);
     setupSerial();
+    resetGame();
+}
+
+void resetGame() {
+    pacman = new Pacman(500, 415);
+    ghost = new Ghost(600, 415);
     for (int i = 0; i < numDots; i++) {
         dotX[i] = random(300, 700);
         dotY[i] = random(200, 500);
@@ -32,4 +38,5 @@ void draw() {
     }
 
     pacman.display();
+    ghost.display();
 }
