@@ -1,11 +1,7 @@
 import processing.serial.*;
 
-<<<<<<< HEAD
-String PORT_NAME = "/dev/ttyACM0";
-=======
 String PACMAN_PORT_NAME = "/dev/cu.usbmodem123456781";
 String GHOST_PORT_NAME = "/dev/cu.usbmodemXXXXXXXX";
->>>>>>> 0bd731c (pulling)
 int baudrate = 115200;
 Serial pacmanPort;
 Serial ghostPort;
