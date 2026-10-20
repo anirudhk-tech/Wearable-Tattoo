@@ -12,6 +12,11 @@ class Snake {
         len = max(n, 1);
     }
 
+    void move(float dx, float dy) {
+        x += dx;
+        y += dy;
+    }
+
     void display() {
         noStroke();
         fill(30, 90, 30);
