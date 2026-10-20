@@ -1,5 +1,13 @@
+int numDots = 10;
+float[] dotX = new float[numDots];
+float[] dotY = new float[numDots];
+
 void setup() {
     size(1000, 830);
+    for (int i = 0; i < numDots; i++) {
+        dotX[i] = random(300, 700);
+        dotY[i] = random(200, 500);
+    }
 }
 
 
@@ -7,9 +15,15 @@ void draw() {
     background(255);
     stroke(0);
 
-    fill(80, 160, 80);
+    fill(0, 0, 0);
     rect(200, 165, 300, 500);
 
-    fill(139, 90, 43);
+    fill(0, 0, 0);
     rect(500, 165, 300, 500);
+
+    fill(255, 0, 0);
+    noStroke();
+    for (int i = 0; i < numDots; i++) {
+        ellipse(dotX[i], dotY[i], 10, 10);
+    }
 }
