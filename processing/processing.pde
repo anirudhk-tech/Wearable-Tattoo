@@ -10,7 +10,7 @@ boolean turbo = false;
 
 Pacman pacman;
 Ghost ghost;
-Dot[] dots = new Dot[numDots];
+Dot[] dots = new Dot[maxDots];
 
 // temporary function 
 void keyPressed() {
@@ -60,6 +60,8 @@ void draw() {
     stroke(0);
     
     fill(0, 0, 0);
+    textSize(20); 
+    text("Dots: " + numDots, 475, 45);
     textSize(40); 
     text("Total score: " + totScore, 400, 100);
 

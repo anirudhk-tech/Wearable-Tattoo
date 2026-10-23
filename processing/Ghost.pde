@@ -11,8 +11,19 @@ class Ghost {
     }
 
     void move(float dx, float dy) {
-        if( ( x+dx > pW && x+dx < (fieldW+pW) ) && ( y+dy > pH && y+dy < (fieldH+pH) ) ){
+        if( x + dx < pW ){
+          x = fieldW + pW + dx;
+        }else if ( x+dx > (fieldW + pW) ) {
+          x = pW;          
+        }else{
           x += dx;
+        }
+        
+        if( y + dy < pH ){
+          y = fieldH + pH + dy;          
+        }else if( y + dy > (fieldH + pH) ){
+          y = pH;   
+        }else{
           y += dy;
         }
     }

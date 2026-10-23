@@ -28,18 +28,24 @@ void serialEvent(Serial p) {
     if (match(line, "^\\d+$") == null) return;
 
     int sensor = int(line);
-/*
-    if (sensor == 8 || sensor == 9) {
-        resetGame();
-        return;
-    }
-*/
+
     float dx = 0;
     float dy = 0;
     if (sensor == 0) dy = -10;
     if (sensor == 1) dy = 10;
     if (sensor == 2) dx = -10;
     if (sensor == 3) dx = 10;
+    
+    if (sensor == 5 && numDots < maxDots){
+      dots[numDots] = new Dot(int(random(pW/10, (pW+fieldW)/10)) * 10, int(random(pH/10, (pH+fieldH)/10)) * 10);
+      numDots++; //increase dots
+    }
+    if (sensor == 6 && numDots > minDots) numDots--; //decrease dots
+    
+    if (sensor == 9) {
+        resetGame();
+        return;
+    }
 
     if (p == pacmanPort){
       if( pacman.turbo > 1 && turbo ){

@@ -10,13 +10,33 @@ class Pacman {
         this.y = y;
         this.turbo = t;
     }
-
+/*
     void move(float dx, float dy) {
         if( ( x+dx > pW && x+dx < (fieldW+pW) ) && ( y+dy > pH && y+dy < (fieldH+pH) ) ){
           x += dx;
           y += dy;
           angle = atan2(dy, dx);
         }
+    }
+*/
+    void move(float dx, float dy) {
+        if( x + dx < pW ){
+          x = fieldW + pW + dx;
+        }else if ( x+dx > (fieldW + pW) ) {
+          x = pW;          
+        }else{
+          x += dx;
+        }
+        
+        if( y + dy < pH ){
+          y = fieldH + pH + dy;          
+        }else if( y + dy > (fieldH + pH) ){
+          y = pH;   
+        }else{
+          y += dy;
+        }
+        
+        angle = atan2(dy, dx);
     }
     
     void changeTurbo(int t){
