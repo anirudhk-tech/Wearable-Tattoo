@@ -70,6 +70,16 @@ int[] pressed = new int[2];
 long[] lastSeen = { -99999, -99999 };
 boolean dbg = false;
 
+// ---- force strip (FS-L-0055-253-ST on Device A) ----
+// Tune these with the live numbers shown on the main menu.
+final int FSLP_POS_MIN = 150;       // position reading at the left end of the strip
+final int FSLP_POS_MAX = 3900;      // position reading at the right end
+final int FSLP_PRESS   = 700;       // force counts that count as a "firm press"
+final boolean FSLP_FLIP = false;    // true if the strip is mounted the other way round
+int fslpPos = -1, fslpForce = 0;
+long fslpSeen = -99999;
+boolean fslpFirmPrev = false;
+
 // ---------------------------------------------------------------- game state
 Snake p1, p2;
 ArrayList<int[]> foods = new ArrayList<int[]>();   // {x, y, type}
@@ -146,6 +156,7 @@ void draw() {
   pollSerial();
   computeInput();
   handleMeta();
+  handleStrip();
   update();
 
   drawBackground();
@@ -160,6 +171,11 @@ void pollSerial() {
       String line = s.readStringUntil('\n');
       if (line == null) break;
       String[] p = split(trim(line), ',');
+      if (p.length == 4 && p[0].equals("F") && p[1].equals("A")) {
+        fslpPos = int(p[2]);
+        fslpForce = int(p[3]);
+        fslpSeen = millis();
+      }
       if (p.length == 3 && p[0].equals("T")) {
         int idx = p[1].equals("A") ? 0 : (p[1].equals("B") ? 1 : -1);
         if (idx >= 0) {
@@ -183,6 +199,28 @@ void computeInput() {
 }
 
 boolean has(int m, int bit) { return (m & (1 << bit)) != 0; }
+
+boolean stripLive() { return millis() - fslpSeen < 600; }
+
+// 0..1 position along the strip (respects FSLP_FLIP)
+float stripNorm() {
+  float n = constrain((fslpPos - FSLP_POS_MIN) / float(FSLP_POS_MAX - FSLP_POS_MIN), 0, 1);
+  return FSLP_FLIP ? 1 - n : n;
+}
+
+// Main menu: slide to highlight, press firmly to select
+void handleStrip() {
+  if (!stripLive()) { fslpFirmPrev = false; return; }
+  boolean touched = fslpPos >= 0;
+  boolean firm = touched && fslpForce >= FSLP_PRESS;
+  if (state == ST_MENU && touched) {
+    float f = stripNorm() * MENU.length;
+    // hysteresis so the highlight doesn't flicker on zone borders
+    if (f < menuSel - 0.12 || f > menuSel + 1.12) menuSel = constrain(floor(f), 0, MENU.length - 1);
+  }
+  if (firm && !fslpFirmPrev && state == ST_MENU) actSelect();
+  fslpFirmPrev = firm;
+}
 
 void handleMeta() {
   for (int p = 0; p < 2; p++) {
@@ -578,8 +616,40 @@ void drawMenu() {
     bold(rows[i][0], 874, y, 15, c1, LEFT);
     label(rows[i][1], 960, y, 15, color(255, 190), LEFT);
   }
+  drawStrip(110, 656, 560);
   label("Don't touch pads while powering up (calibration).", 850, 690, 13, color(255, 90), LEFT);
   label("Keys:  WASD+E  /  arrows+.  ·  Enter  P  R  M  H  T  G  C", 850, 712, 13, color(255, 90), LEFT);
+}
+
+void drawStrip(float x, float y, float w) {
+  int c1 = PAL[theme][0];
+  boolean live = stripLive();
+  boolean touched = live && fslpPos >= 0;
+  boolean firm = touched && fslpForce >= FSLP_PRESS;
+  glass(x, y, w, 76, 18, 10);
+  label("FORCE STRIP", x + 20, y + 15, 12, color(255, 120), LEFT);
+  label(live ? "slide = choose   ·   press firmly = select" : "not detected (needs Device A with HAS_FSLP 1)",
+        x + w - 20, y + 15, 12, color(255, 110), RIGHT);
+
+  float tx = x + 20, tw = w - 40, ty = y + 30, th = 24;
+  String[] zn = { "VERSUS", "SOLO", "SCORES" };
+  noStroke();
+  for (int i = 0; i < MENU.length; i++) {
+    float zw = tw / MENU.length, zx = tx + i * zw;
+    boolean sel = (i == menuSel);
+    fill(sel ? c1 : color(255), sel ? 55 : 14);
+    rect(zx + 2, ty, zw - 4, th, 9);
+    label(zn[i], zx + zw / 2, ty + th / 2, 12, sel ? color(255) : color(255, 110), CENTER);
+  }
+  if (touched) {
+    float mx = tx + stripNorm() * tw;
+    float k = constrain(fslpForce / float(FSLP_PRESS), 0, 1.3);
+    float r = 7 + 9 * k;
+    fill(firm ? color(255) : c1, 50); ellipse(mx, ty + th / 2, r * 2 + 12, r * 2 + 12);
+    fill(firm ? color(255) : c1); ellipse(mx, ty + th / 2, r, r);
+  }
+  label("pos " + (touched ? str(fslpPos) : "--") + "   force " + (live ? str(fslpForce) : "--")
+        + "   (press at " + FSLP_PRESS + ")", x + 20, y + 66, 11, color(255, 90), LEFT);
 }
 
 void chip(float x, float y, String s, boolean on, int col) {
