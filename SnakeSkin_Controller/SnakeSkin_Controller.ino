@@ -1,12 +1,12 @@
 /*
   SNAKE//SKIN  -  Smart Tattoo controller firmware
   Board : ESP32 (e.g. DFRobot FireBeetle ESP32) + Adafruit MPR121
-          (+ optional Spectra Symbol FS-L-0055-253-ST force-sensing linear pot)
+          (+ optional Spectra Symbol FS-L-0055-253-ST force strip)
 
   TWO OUTPUT MODES (set GAME_MODE below):
     GAME_MODE false -> Serial Monitor mode. Prints ONLY when something happens:
                          Sensor 1 touched
-                         Strip moved: pos 1830  force 412
+                         Strip pressed: force 412
                        Nothing is printed while idle.
     GAME_MODE true  -> data stream for the Processing game (T,... and F,... lines).
                        The game needs this stream, so set it to true when you play.
@@ -17,10 +17,12 @@
 
   Keep hands OFF all pads while powering up (baseline is measured at boot).
 
-  FORCE STRIP WIRING (3.3V logic!)
-    Strip SL -> FSLP_SL (ADC1 pin), D1 -> FSLP_D1, D2 -> FSLP_D2,
-    Ro (4.7k-10k) between strip SL and FSLP_R0. 4th tail pin unused.
-    CHANGE THE GPIO NUMBERS BELOW to match how you wired your board.
+  FORCE STRIP WIRING (3.3V logic) - voltage divider, only 3 connections:
+    3V3 -------- strip pin (one end of the strip)
+    A0  -------- strip SL pin (the wiper), and the same node goes through
+                 resistor Ro (4.7k-10k) to GND
+    Pressing harder lowers the strip resistance, so the A0 voltage RISES.
+    No touch -> A0 is pulled to ~0 by Ro. This gives force only (no position).
 */
 
 #include <Wire.h>
@@ -28,16 +30,12 @@
 
 #define DEVICE_ID 'A'          // <-- 'A' or 'B'
 #define HAS_FSLP  1            // <-- 1 if this device has the force strip
-#define GAME_MODE false        // <-- false = readable Serial Monitor, true = Processing game
+#define GAME_MODE true         // <-- true = Processing game (default), false = readable Serial Monitor
 
-// ---- force strip pins (edit to match your wiring) ----
-#define FSLP_SL  A0            // strip SL -> A0 (the board's own A0 label)
-#define FSLP_D1  25
-#define FSLP_D2  26
-#define FSLP_R0  27
-#define FSLP_TOUCH_MIN   15    // force counts below this = not touched (lower = more sensitive)
-#define STRIP_PRINT_DELTA 30   // Serial Monitor: print only if position moved this much
-#define STRIP_DEBUG false      // true = also print the raw A0 reading 4x/second (for wiring checks)
+#define FSLP_SL  A0            // strip signal -> A0
+#define FSLP_TOUCH_MIN   60    // force counts below this = not pressed (lower = more sensitive)
+#define STRIP_PRINT_DELTA 40   // Serial Monitor: print again only if force changed this much
+#define STRIP_DEBUG false      // true = also print the raw A0 reading 4x/second (wiring check)
 
 Adafruit_MPR121 cap = Adafruit_MPR121();
 
@@ -50,7 +48,8 @@ bool wasTouched[NUM_SENSORS];
 uint16_t lastMask = 0xFFFF;
 unsigned long lastSend = 0;
 unsigned long lastStrip = 0;
-int lastPrintedPos = -1;
+bool stripDown = false;
+int lastPrintedForce = 0;
 
 // ESP32 has a 12-bit ADC (0-4095). Other boards are 10-bit, so scale to 0-4095.
 #if defined(ARDUINO_ARCH_ESP32)
@@ -60,35 +59,10 @@ int lastPrintedPos = -1;
 #endif
 
 #if HAS_FSLP
-int avgRead(int pin, int n) {
+int readForce() {
   long sum = 0;
-  for (int i = 0; i < n; i++) sum += analogRead(pin);
-  return (sum / n) << ADC_SHIFT;
-}
-
-// returns force (raw counts) and position (-1 if not touched)
-void readStrip(int &pos, int &force) {
-  // 1) FORCE: D1 high, R0 low, D2 floating -> SL rises as you press harder
-  pinMode(FSLP_D1, OUTPUT); digitalWrite(FSLP_D1, HIGH);
-  pinMode(FSLP_D2, INPUT);
-  pinMode(FSLP_R0, OUTPUT); digitalWrite(FSLP_R0, LOW);
-  delayMicroseconds(300);
-  force = avgRead(FSLP_SL, 8);
-
-  if (force < FSLP_TOUCH_MIN) {         // nothing touching the strip
-    pos = -1;
-    pinMode(FSLP_D1, INPUT);
-    return;
-  }
-
-  // 2) POSITION: D1 high, D2 low, R0 high-impedance -> SL = voltage divider
-  pinMode(FSLP_R0, INPUT);
-  pinMode(FSLP_D2, OUTPUT); digitalWrite(FSLP_D2, LOW);
-  delayMicroseconds(300);
-  pos = avgRead(FSLP_SL, 8);
-
-  pinMode(FSLP_D2, INPUT);
-  pinMode(FSLP_D1, INPUT);
+  for (int i = 0; i < 8; i++) sum += analogRead(FSLP_SL);
+  return (sum / 8) << ADC_SHIFT;
 }
 #endif
 
@@ -162,15 +136,12 @@ void loop() {
 
 #if HAS_FSLP
   if (now - lastStrip >= 30) {          // ~33 Hz
-    int pos, force;
-    readStrip(pos, force);
+    int force = readForce();
     lastStrip = now;
 
 #if GAME_MODE
     Serial.print("F,");
     Serial.print((char)DEVICE_ID);
-    Serial.print(",");
-    Serial.print(pos);
     Serial.print(",");
     Serial.println(force);
 #else
@@ -179,21 +150,17 @@ void loop() {
     if (now - lastDbg > 250) {
       Serial.print("[strip raw A0 force=");
       Serial.print(force);
-      Serial.print(" pos=");
-      Serial.print(pos);
       Serial.println("]");
       lastDbg = now;
     }
 #endif
-    if (pos < 0) {
-      lastPrintedPos = -1;              // finger lifted: reset
-    } else if (lastPrintedPos < 0 || abs(pos - lastPrintedPos) >= STRIP_PRINT_DELTA) {
-      Serial.print("Strip moved: pos ");
-      Serial.print(pos);
-      Serial.print("  force ");
+    bool down = force >= FSLP_TOUCH_MIN;
+    if (down && (!stripDown || abs(force - lastPrintedForce) >= STRIP_PRINT_DELTA)) {
+      Serial.print("Strip pressed: force ");
       Serial.println(force);
-      lastPrintedPos = pos;
+      lastPrintedForce = force;
     }
+    stripDown = down;
 #endif
   }
 #endif
