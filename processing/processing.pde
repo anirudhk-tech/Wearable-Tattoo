@@ -12,12 +12,12 @@ Pacman pacman;
 Ghost ghost;
 Dot[] dots = new Dot[maxDots];
 
-// temporary function 
+/* temporary function 
 void keyPressed() {
     if (key == 't') turbo = true;
     if (key == 'f') turbo = false;
 }
-
+*/
 void setup() {
     size(1000, 830);
     setupSerial();

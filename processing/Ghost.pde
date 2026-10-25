@@ -9,6 +9,11 @@ class Ghost {
         this.y = y;
         this.turbo = t;
     }
+    
+    void changePosition(float x, float y){
+      this.x = x;
+      this.y = y;
+    }
 
     void move(float dx, float dy) {
         if( x + dx < pW ){
@@ -30,6 +35,10 @@ class Ghost {
     
     void changeTurbo(int t){
       turbo += t;
+    }   
+    
+    void setMaxTurbo(){
+      turbo = maxTurbo; 
     }
     
     void changeColor(){

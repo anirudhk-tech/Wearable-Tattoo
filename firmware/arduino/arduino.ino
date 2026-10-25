@@ -11,6 +11,7 @@
 
 Adafruit_MPR121 cap = Adafruit_MPR121();
 
+const int Spectra_PIN = A0;
 const int NUM_SENSORS = 12;
 const int DROP_THRESHOLD = 5;   // how far the reading must fall to count as a touch
 
@@ -52,10 +53,13 @@ void loop() {
     bool touched = chipSaysTouched || dropped;
 
     if (touched && !wasTouched[s]) {
-      Serial.println(s);
+      Serial.print(s);
     }
     wasTouched[s] = touched;
   }
+
+  Serial.print(", ");
+  Serial.println(analogRead(Spectra_PIN));
 
   delay(10);
 }
