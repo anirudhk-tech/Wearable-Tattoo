@@ -48,7 +48,7 @@ String[] MENU = { "1v1  VERSUS", "SOLO  SCORE ATTACK", "HIGH  SCORES" };
 String[] MENU_SUB = { "Eat. Bite. Outgrow your rival.", "Beat the clock, set a record.", "Hall of fame" };
 
 String[] LBL_A = { "UP", "DN", "LT", "RT", "BST", "PSE", "RST", "MNU", "GO", "HI" };
-String[] LBL_B = { "UP", "DN", "LT", "RT", "BST", "PSE", "RST", "MNU", "THM", "DBG" };
+String[] LBL_B = { "UP", "DN", "LT", "RT", "BST", "", "", "", "", "" };
 
 // themes: P1 head, P1 tail, P2 head, P2 tail
 int[][] PAL = {
@@ -69,16 +69,22 @@ int[] prevCur = new int[2];
 int[] pressed = new int[2];
 long[] lastSeen = { -99999, -99999 };
 boolean dbg = false;
+String lastRaw = "";
+long[] portA = new long[16];   // last time each serial port reported itself as Device A
 
-// ---- force strip (FS-L-0055-253-ST on Device A) ----
-// Tune these with the live numbers shown on the main menu.
-final int FSLP_POS_MIN = 150;       // position reading at the left end of the strip
-final int FSLP_POS_MAX = 3900;      // position reading at the right end
-final int FSLP_PRESS   = 700;       // force counts that count as a "firm press"
-final boolean FSLP_FLIP = false;    // true if the strip is mounted the other way round
-int fslpPos = -1, fslpForce = 0;
+// ---- force strip (FS-L-0055-253-ST on Device A, force only) ----
+// Menu: TAP = next item, HOLD = select. Tune with the live force number on the menu.
+final int FSLP_ON         = 12;    // reading must move this far from the idle level to count as pressed (up OR down)
+final int FSLP_OFF        = 6;     // ...and must come back within this to count as released
+final int FSLP_RELEASE_MS = 120;   // ignore dropouts shorter than this (the signal is noisy)
+final int FSLP_TAP_MAX    = 600;   // ms: a press shorter than this is a tap
+final int FSLP_HOLD       = 700;   // ms: hold this long to select
+int fslpForce = 0;
+float fslpBase = 0;                // idle level, tracked automatically
+boolean fslpBaseInit = false;
 long fslpSeen = -99999;
-boolean fslpFirmPrev = false;
+boolean fslpDown = false, fslpHoldFired = false;
+long fslpDownAt = 0, fslpLastHigh = 0;
 
 // ---------------------------------------------------------------- game state
 Snake p1, p2;
@@ -138,7 +144,7 @@ void connectSerial() {
   for (String name : list) {
     String low = name.toLowerCase();
     if (low.contains("bluetooth") || low.contains("debug-console")) continue;
-    if (!(low.contains("usb") || low.contains("acm") || low.contains("com") || low.contains("wch"))) continue;
+    if (low.contains("/tty.")) continue;   // macOS: use the cu.* twin only
     try {
       Serial s = new Serial(this, name, BAUD);
       links.add(s);
@@ -170,10 +176,11 @@ void pollSerial() {
     while (s.available() > 0) {
       String line = s.readStringUntil('\n');
       if (line == null) break;
-      String[] p = split(trim(line), ',');
-      if (p.length == 4 && p[0].equals("F") && p[1].equals("A")) {
-        fslpPos = int(p[2]);
-        fslpForce = int(p[3]);
+      lastRaw = trim(line);
+      String[] p = split(lastRaw, ',');
+      if (p.length == 3 && p[0].equals("T") && p[1].equals("A")) { int pi = links.indexOf(s); if (pi >= 0 && pi < 16) portA[pi] = millis(); }
+      if (p.length == 3 && p[0].equals("F") && p[1].equals("A")) {
+        fslpForce = int(p[2]);
         fslpSeen = millis();
       }
       if (p.length == 3 && p[0].equals("T")) {
@@ -186,6 +193,12 @@ void pollSerial() {
     }
   }
   for (int i = 0; i < 2; i++) if (millis() - lastSeen[i] > 600) devMask[i] = 0;
+}
+
+boolean dupA() {   // two boards both claiming to be Device A?
+  int n = 0;
+  for (int i = 0; i < links.size() && i < 16; i++) if (millis() - portA[i] < 600) n++;
+  return n >= 2;
 }
 
 boolean linked(int i) { return millis() - lastSeen[i] < 600; }
@@ -202,30 +215,38 @@ boolean has(int m, int bit) { return (m & (1 << bit)) != 0; }
 
 boolean stripLive() { return millis() - fslpSeen < 600; }
 
-// 0..1 position along the strip (respects FSLP_FLIP)
-float stripNorm() {
-  float n = constrain((fslpPos - FSLP_POS_MIN) / float(FSLP_POS_MAX - FSLP_POS_MIN), 0, 1);
-  return FSLP_FLIP ? 1 - n : n;
-}
-
-// Main menu: slide to highlight, press firmly to select
+// Main menu: tap = next item, hold = select.
+// Uses an automatic idle baseline plus on/off hysteresis so a noisy signal can't cut a hold short.
 void handleStrip() {
-  if (!stripLive()) { fslpFirmPrev = false; return; }
-  boolean touched = fslpPos >= 0;
-  boolean firm = touched && fslpForce >= FSLP_PRESS;
-  if (state == ST_MENU && touched) {
-    float f = stripNorm() * MENU.length;
-    // hysteresis so the highlight doesn't flicker on zone borders
-    if (f < menuSel - 0.12 || f > menuSel + 1.12) menuSel = constrain(floor(f), 0, MENU.length - 1);
+  if (!stripLive()) { fslpDown = false; fslpBaseInit = false; return; }
+  long now = millis();
+  if (!fslpBaseInit) { fslpBase = fslpForce; fslpBaseInit = true; }
+  float above = abs(fslpForce - fslpBase);                  // moves either way from idle
+
+  boolean raw = fslpDown ? (above > FSLP_OFF) : (above > FSLP_ON);
+  boolean down = fslpDown;
+  if (raw) {
+    fslpLastHigh = now;
+    if (!fslpDown) { down = true; fslpDownAt = now; fslpHoldFired = false; }
+  } else if (fslpDown && now - fslpLastHigh > FSLP_RELEASE_MS) {
+    down = false;
   }
-  if (firm && !fslpFirmPrev && state == ST_MENU) actSelect();
-  fslpFirmPrev = firm;
+  if (!down) fslpBase = lerp(fslpBase, fslpForce, 0.03);   // slow drift while idle
+
+  if (down && state == ST_MENU && !fslpHoldFired && now - fslpDownAt >= FSLP_HOLD) {
+    fslpHoldFired = true;
+    actSelect();
+  }
+  if (!down && fslpDown && state == ST_MENU && !fslpHoldFired && (fslpLastHigh - fslpDownAt) <= FSLP_TAP_MAX) {
+    menuSel = (menuSel + 1) % MENU.length;
+  }
+  fslpDown = down;
 }
 
 void handleMeta() {
   for (int p = 0; p < 2; p++) {
     int pr = pressed[p];
-    if (pr == 0) continue;
+    if (pr == 0 || p == 1) continue;   // Device B (Player 2) only plays: steering + boost, nothing else
     if (state == ST_MENU) {
       if (has(pr, 0)) menuSel = (menuSel + MENU.length - 1) % MENU.length;
       if (has(pr, 1)) menuSel = (menuSel + 1) % MENU.length;
@@ -236,8 +257,6 @@ void handleMeta() {
     if (has(pr, 7)) actMenu();
     if (p == 0 && has(pr, 8)) actSelect();
     if (p == 0 && has(pr, 9)) actScores();
-    if (p == 1 && has(pr, 8)) actTheme();
-    if (p == 1 && has(pr, 9)) actDebug();
   }
 }
 
@@ -600,16 +619,21 @@ void drawMenu() {
   // link status chips
   chip(850, 150, "DEVICE A  ·  PLAYER 1", linked(0), PAL[theme][0]);
   chip(850, 200, "DEVICE B  ·  PLAYER 2", linked(1), PAL[theme][2]);
-  label("keyboard fallback active", 850, 258, 14, color(255, 100), LEFT);
+  String pl = linkNames.size() == 0 ? "none found (press C to rescan)" : join(linkNames.toArray(new String[0]), ", ");
+  label("ports: " + pl, 850, 254, 11, color(255, 100), LEFT);
+  String lr = lastRaw.length() == 0 ? "nothing received yet" : lastRaw;
+  if (lr.length() > 44) lr = lr.substring(0, 44);
+  label("last data: " + lr, 850, 272, 11, color(255, 100), LEFT);
+  if (dupA()) label("Two boards both say Device A: set DEVICE_ID 'B' on one and re-upload", 850, 289, 11, 0xFFFFB74D, LEFT);
 
   // pad cheat sheet
   glass(850, 300, 390, 360, 22, 10);
   bold("TATTOO PAD MAP", 874, 330, 18, color(255, 220), LEFT);
   String[][] rows = {
-    { "0 1 2 3", "UP  DOWN  LEFT  RIGHT" }, { "4", "BOOST  /  select in menu" },
-    { "5", "PAUSE" }, { "6", "RESTART" }, { "7", "MAIN MENU" },
+    { "0 1 2 3", "STEER   (A = P1,  B = P2)" }, { "4", "BOOST   (A: also select in menu)" },
+    { "A · 5", "PAUSE" }, { "A · 6", "RESTART" }, { "A · 7", "MAIN MENU" },
     { "A · 8", "SELECT / START" }, { "A · 9", "HIGH SCORES" },
-    { "B · 8", "CYCLE THEME" }, { "B · 9", "PAD DEBUG" }
+    { "B · 5-9", "not used (play only)" }, { "keys T / G", "theme / pad debug" }
   };
   for (int i = 0; i < rows.length; i++) {
     float y = 372 + i * 32;
@@ -624,32 +648,30 @@ void drawMenu() {
 void drawStrip(float x, float y, float w) {
   int c1 = PAL[theme][0];
   boolean live = stripLive();
-  boolean touched = live && fslpPos >= 0;
-  boolean firm = touched && fslpForce >= FSLP_PRESS;
+  boolean down = live && fslpDown;
   glass(x, y, w, 76, 18, 10);
   label("FORCE STRIP", x + 20, y + 15, 12, color(255, 120), LEFT);
-  label(live ? "slide = choose   ·   press firmly = select" : "not detected (needs Device A with HAS_FSLP 1)",
-        x + w - 20, y + 15, 12, color(255, 110), RIGHT);
+  label(live ? (down ? "PRESSED" : "tap = next   ·   hold = select") : "not detected (needs Device A with HAS_FSLP 1)",
+        x + w - 20, y + 15, 12, down ? c1 : color(255, 110), RIGHT);
 
-  float tx = x + 20, tw = w - 40, ty = y + 30, th = 24;
+  float tx = x + 20, tw = w - 40, ty = y + 28, th = 24;
   String[] zn = { "VERSUS", "SOLO", "SCORES" };
+  float zw = tw / MENU.length;
   noStroke();
   for (int i = 0; i < MENU.length; i++) {
-    float zw = tw / MENU.length, zx = tx + i * zw;
     boolean sel = (i == menuSel);
     fill(sel ? c1 : color(255), sel ? 55 : 14);
-    rect(zx + 2, ty, zw - 4, th, 9);
-    label(zn[i], zx + zw / 2, ty + th / 2, 12, sel ? color(255) : color(255, 110), CENTER);
+    rect(tx + i * zw + 2, ty, zw - 4, th, 9);
+    label(zn[i], tx + i * zw + zw / 2, ty + th / 2, 12, sel ? color(255) : color(255, 110), CENTER);
   }
-  if (touched) {
-    float mx = tx + stripNorm() * tw;
-    float k = constrain(fslpForce / float(FSLP_PRESS), 0, 1.3);
-    float r = 7 + 9 * k;
-    fill(firm ? color(255) : c1, 50); ellipse(mx, ty + th / 2, r * 2 + 12, r * 2 + 12);
-    fill(firm ? color(255) : c1); ellipse(mx, ty + th / 2, r, r);
+  if (down && !fslpHoldFired) {         // hold-to-select progress
+    float k = constrain((millis() - fslpDownAt) / (float) FSLP_HOLD, 0, 1);
+    fill(c1); rect(tx + menuSel * zw + 2, ty + th - 4, (zw - 4) * k, 4, 2);
   }
-  label("pos " + (touched ? str(fslpPos) : "--") + "   force " + (live ? str(fslpForce) : "--")
-        + "   (press at " + FSLP_PRESS + ")", x + 20, y + 66, 11, color(255, 90), LEFT);
+  float above = live ? abs(fslpForce - fslpBase) : 0;
+  bar(tx, y + 58, tw, 5, constrain(above / (FSLP_ON * 4.0), 0, 1), down ? color(255) : c1);
+  label("force " + (live ? str(fslpForce) : "--") + "   idle " + (live ? str(int(fslpBase)) : "--")
+        + "   (needs ±" + FSLP_ON + " to press)", x + 20, y + 70, 11, color(255, 90), LEFT);
 }
 
 void chip(float x, float y, String s, boolean on, int col) {
@@ -659,7 +681,7 @@ void chip(float x, float y, String s, boolean on, int col) {
     fill(0xFF69F0AE); ellipse(x + 22, y + 19, 10, 10);
   }
   label(s, x + 42, y + 19, 15, color(255, 210), LEFT);
-  label(on ? "LINKED" : "OFFLINE", x + 372, y + 19, 13, on ? color(0xFF69F0AE) : color(255, 110), RIGHT);
+  label(on ? "CONNECTED" : "NOT CONNECTED", x + 372, y + 19, 13, on ? color(0xFF69F0AE) : color(255, 170), RIGHT);
 }
 
 // ================================================================ scores
