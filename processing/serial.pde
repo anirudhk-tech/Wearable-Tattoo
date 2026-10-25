@@ -12,8 +12,8 @@ void setupSerial() {
     printArray(Serial.list());
     pacmanPort = new Serial(this, PACMAN_PORT_NAME, baudrate);
     pacmanPort.bufferUntil('\n');
-    //ghostPort = new Serial(this, GHOST_PORT_NAME, baudrate);
-    //ghostPort.bufferUntil('\n');
+    ghostPort = new Serial(this, GHOST_PORT_NAME, baudrate);
+    ghostPort.bufferUntil('\n');
 }
 
 void serialEvent(Serial p) {
@@ -22,7 +22,7 @@ void serialEvent(Serial p) {
     line = trim(line); 
     
     if (p == pacmanPort) {
-      //println("PACMAN serial: " + line);
+      println("PACMAN serial: " + line);
     } else {
       println("GHOST serial: " + line);
     }
