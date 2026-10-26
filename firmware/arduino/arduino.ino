@@ -1,11 +1,3 @@
-/*
-  MPR121 touch test - all 12 electrodes (0 to 11).
-  Prints "Sensor N touched" when the pad on electrode N is touched.
-
-  Wiring: VIN->3.3V, GND->GND, SDA->SDA, SCL->SCL, copper pads -> electrodes 0..11
-  Serial Monitor: 115200 baud. Keep hands off all pads while powering up.
-*/
-
 #include <Wire.h>
 #include "Adafruit_MPR121.h"
 
@@ -13,7 +5,7 @@ Adafruit_MPR121 cap = Adafruit_MPR121();
 
 const int Spectra_PIN = A0;
 const int NUM_SENSORS = 12;
-const int DROP_THRESHOLD = 5;   // how far the reading must fall to count as a touch
+const int DROP_THRESHOLD = 5;
 
 int  softBaseline[NUM_SENSORS];
 bool wasTouched[NUM_SENSORS];
