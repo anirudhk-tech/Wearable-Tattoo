@@ -54,12 +54,11 @@ void loop() {
 
     if (touched && !wasTouched[s]) {
       Serial.print(s);
+      Serial.print(", ");
+      Serial.println(analogRead(Spectra_PIN));
     }
     wasTouched[s] = touched;
   }
-
-  Serial.print(", ");
-  Serial.println(analogRead(Spectra_PIN));
 
   delay(10);
 }
